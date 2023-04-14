@@ -35,49 +35,8 @@ def end_use(building_temp, scout_col2resstock, agg_functions):
         building_results = pd.concat(frames)
     return(building_results)
 
-results = pd.DataFrame(columns=['Hour of Year', 'EMM Region', 'Building Type'])
-for key in emm_county:
-    #get data in 15 min timestep
-    temp_15 = my_run.savings.savings_shape(upgrade_id=upgrade_num,applied_only=True, restrict=[('county',emm_county[key])], 
-                                        enduses = ['fuel_use__electricity__total__kwh',
-                                                   'end_use__electricity__cooling__kwh',
-                                                   'end_use__electricity__heating__kwh',
-                                                   'end_use__electricity__heating_heat_pump_backup__kwh',
-                                                   'end_use__electricity__clothes_dryer__kwh',
-                                                   'end_use__electricity__clothes_washer__kwh',
-                                                   'end_use__electricity__range_oven__kwh',
-                                                   'end_use__electricity__dishwasher__kwh',
-                                                   'end_use__electricity__cooling_fans_pumps__kwh',
-                                                   'end_use__electricity__heating_fans_pumps__kwh',
-                                                   'end_use__electricity__mech_vent__kwh',
-                                                   'end_use__electricity__lighting_exterior__kwh',
-                                                   'end_use__electricity__lighting_garage__kwh',
-                                                   'end_use__electricity__lighting_interior__kwh',
-                                                   'end_use__electricity__ceiling_fan__kwh',
-                                                   'end_use__electricity__hot_tub_heater__kwh',
-                                                   'end_use__electricity__hot_tub_pump__kwh',
-                                                   'end_use__electricity__well_pump__kwh',
-                                                   'end_use__electricity__plug_loads__kwh',
-                                                   'end_use__electricity__pool_heater__kwh',
-                                                   'end_use__electricity__pool_pump__kwh',
-                                                   'end_use__electricity__freezer__kwh',
-                                                   'end_use__electricity__refrigerator__kwh',
-                                                   'end_use__electricity__hot_water__kwh'],
-                                        group_by = ['geometry_building_type_recs'], annual_only=False)
-    #rename column in the Scout-EUSS format
-    temp_15.rename(columns={'geometry_building_type_recs': 'Building Type'}, inplace=True)
-    
-    #change the data to 60 min timestep
-    temp_60 = pd.DataFrame(columns=['time', 'EMM Region', 'Building Type','End Use'])
-    temp_60['time'] = temp_15['time'].groupby(np.arange(len(temp_15))//4).first().astype(str).str[5:13]
-    temp_60['Building Type'] = temp_15['Building Type'].groupby(np.arange(len(temp_15))//4).first()
-    temp_other_60= temp_15.groupby(np.arange(len(temp_15))//4).sum()
-    temp_60=pd.concat([temp_60,temp_other_60],axis=1)
-
-    temp_60['EMM Region'] = key #add emm region
-
-    #group end use data to scout-euss format
-    scout_col2resstock = {
+#group end use data to scout-euss format
+scout_col2resstock = {
     'heating': ['end_use__electricity__heating__kwh', 'end_use__electricity__heating_heat_pump_backup__kwh'],
     'cooling': ['end_use__electricity__cooling__kwh'],
     'water heating': ['end_use__electricity__hot_water__kwh'],
@@ -92,28 +51,35 @@ for key in emm_county:
     'plug loads': ['end_use__electricity__plug_loads__kwh'],
     'other': ['end_use__electricity__ceiling_fan__kwh','end_use__electricity__hot_tub_heater__kwh','end_use__electricity__hot_tub_pump__kwh','end_use__electricity__well_pump__kwh']  
     }
+
+all_enduses = [enduse for enduse_list in scout_col2resstock.values() for enduse in enduse_list]
+
+results = pd.DataFrame(columns=['Hour of Year', 'EMM Region', 'Building Type'])
+for key in emm_county:
+    #get data in 15 min timestep
+    temp_15 = my_run.savings.savings_shape(upgrade_id=upgrade_num,applied_only=True, restrict=[('county',emm_county[key])], 
+                                        enduses = all_enduses,
+                                        group_by = ['geometry_building_type_recs'], annual_only=False)
+    #rename column in the Scout-EUSS format
+    temp_15.rename(columns={'geometry_building_type_recs': 'Building Type'}, inplace=True)
+    
+    #change the data to 60 min timestep
+    temp_60 = pd.DataFrame(columns=['time', 'EMM Region', 'Building Type','End Use'])
+    temp_60['time'] = temp_15['time'].groupby(np.arange(len(temp_15))//4).first().astype(str).str[5:13]
+    temp_60['Building Type'] = temp_15['Building Type'].groupby(np.arange(len(temp_15))//4).first()
+    temp_other_60= temp_15.groupby(np.arange(len(temp_15))//4).sum()
+    temp_60=pd.concat([temp_60,temp_other_60],axis=1)
+
+    temp_60['EMM Region'] = key #add emm region
     
     #get the data needed by Scout-EUSS
     temp = temp_60[['time', 'EMM Region', 'Building Type','End Use']]
+    agg_functions = {'time': 'first','EMM Region': 'first','Building Type': 'first'}
     for col_type in ['baseline', 'savings']:
         for resstock_col_prefixes in scout_col2resstock.keys():
             resstock_cols = [f"{resstock_col_prefix}__{col_type}" for resstock_col_prefix in scout_col2resstock[resstock_col_prefixes]]
-            temp[f"{resstock_col_prefixes}__{col_type}"] = temp_60[resstock_cols].sum(axis=1)   
-
-    agg_functions = {'time': 'first','EMM Region': 'first','Building Type': 'first',
-                     'heating__baseline': 'sum', 'heating__savings': 'sum',
-                     'cooling__baseline': 'sum', 'cooling__savings': 'sum',
-                     'water heating__baseline': 'sum','water heating__savings': 'sum',
-                     'lighting__baseline': 'sum','lighting__savings': 'sum',
-                     'cooking__baseline': 'sum','cooking__savings': 'sum',
-                     'refrigeration__baseline': 'sum','refrigeration__savings': 'sum',
-                     'clothes washing__baseline': 'sum','clothes washing__savings': 'sum',
-                     'clothes drying__baseline': 'sum','clothes drying__savings': 'sum',
-                     'dishwasher__baseline': 'sum','dishwasher__savings': 'sum',
-                     'pool heaters and pumps__baseline': 'sum','pool heaters and pumps__savings': 'sum',
-                     'fans and pumps__baseline': 'sum','fans and pumps__savings': 'sum',
-                     'plug loads__baseline': 'sum','plug loads__savings': 'sum',
-                     'other__baseline': 'sum','other__savings': 'sum'}
+            temp[f"{resstock_col_prefixes}__{col_type}"] = temp_60[resstock_cols].sum(axis=1)
+            agg_functions[f"{resstock_col_prefixes}__{col_type}"] = 'sum'   
     
     #rename Mobile Home to MH
     MH_temp=temp.loc[temp['Building Type'].isin(['Mobile Home'])]
