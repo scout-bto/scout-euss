@@ -17,23 +17,28 @@ def end_use(building_temp, scout_col2resstock, agg_functions):
     building = building_temp.groupby(building_temp['time']).aggregate(agg_functions)
     #add hour of year
     building.insert(loc=0, column='Hour of Year', value=np.arange(len(building), dtype=int)+1)
-    # delete the end use columns that doesn't have savings
+    # delete the end use columns that don't have changes
+    # delete the end use columns that have very small negative savings (less than 1%)
     for resstock_col_prefixes in scout_col2resstock.keys():
-        if (building[f"{resstock_col_prefixes}__savings"] >= 0).all(axis=0):
+        if (building[f"{resstock_col_prefixes}__savings"] == 0).all(axis=0):
+            building = building.drop([f"{resstock_col_prefixes}__baseline"], axis=1)
+            building = building.drop([f"{resstock_col_prefixes}__savings"], axis=1)
+        elif (building[f"{resstock_col_prefixes}__savings"] <= 0).all(axis=0) and (building[f"{resstock_col_prefixes}__savings"]/building[f"{resstock_col_prefixes}__baseline"]>-0.01).all(axis=0):
             building = building.drop([f"{resstock_col_prefixes}__baseline"], axis=1)
             building = building.drop([f"{resstock_col_prefixes}__savings"], axis=1)
             
     # save individual end use data to results
     building_results = pd.DataFrame(columns=['Hour of Year', 'EMM Region', 'Building Type'])
     num_end_use = int((building.shape[1]-3)/2)
+    all_frames = []
     for j in range (num_end_use):
-        building_end_use = building[['Hour of Year','EMM Region', 'Building Type']]
-        building_end_use['End Use'] = building.columns[4+j*2].split('__')[0]
-        building_end_use['Baseline'] = building[building.columns[4+j*2]]
-        building_end_use['Measure'] = building[building.columns[4+j*2]]-building[building.columns[5+j*2]]
-        frames = [building_results, building_end_use]
-        building_results = pd.concat(frames)
-    return(building_results)
+        building_end_use = building[['Hour of Year','EMM Region', 'Building Type']].copy()
+        building_end_use['End Use'] = building.columns[4+j].split('__')[0]
+        building_end_use['Baseline'] = building[building.columns[4+j]]
+        building_end_use['Measure'] = building[building.columns[4+j]]-building[building.columns[4+num_end_use+j]]
+        all_frames.append(building_end_use)
+    building_results = pd.concat(all_frames)
+    return building_results
 
 #group end use data to scout-euss format
 scout_col2resstock = {
