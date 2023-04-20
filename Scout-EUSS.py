@@ -13,7 +13,7 @@ my_run = BuildStockQuery(db_name='euss-final',
                         workgroup='scout',
                         buildstock_type='resstock')
 
-def end_use(building_temp, scout_col2resstock, agg_functions):
+def record_end_use_savings(building_temp, scout_col2resstock, agg_functions):
     building = building_temp.groupby(building_temp['time']).aggregate(agg_functions)
     #add hour of year
     building.insert(loc=0, column='Hour of Year', value=np.arange(len(building), dtype=int)+1)
@@ -89,17 +89,17 @@ for key in emm_county:
     #rename Mobile Home to MH
     MH_temp=temp.loc[temp['Building Type'].isin(['Mobile Home'])]
     MH_temp['Building Type'] = MH_temp['Building Type'].replace('Mobile Home','MH')
-    MH = end_use(MH_temp, scout_col2resstock, agg_functions)
+    MH = record_end_use_savings(MH_temp, scout_col2resstock, agg_functions)
     
     #aggragate Single-Family Attached and Single-Family Detached to SF
     SF_temp=temp.loc[temp['Building Type'].isin(['Single-Family Attached','Single-Family Detached'])]
     SF_temp['Building Type'] = SF_temp['Building Type'].replace('Single-Family Attached','SF').replace('Single-Family Detached','SF')
-    SF = end_use(SF_temp, scout_col2resstock, agg_functions)
+    SF = record_end_use_savings(SF_temp, scout_col2resstock, agg_functions)
     
     #aggragate Multi-Family with 2 - 4 Units and Multi-Family with 5+ Units to MF
     MF_temp=temp.loc[temp['Building Type'].isin(['Multi-Family with 2 - 4 Units','Multi-Family with 5+ Units'])]
     MF_temp['Building Type'] = MF_temp['Building Type'].replace('Multi-Family with 2 - 4 Units','MF').replace('Multi-Family with 5+ Units','MF')
-    MF = end_use(MF_temp, scout_col2resstock, agg_functions)
+    MF = record_end_use_savings(MF_temp, scout_col2resstock, agg_functions)
     
     frames = [results,MH, SF, MF]
     results = pd.concat(frames)
