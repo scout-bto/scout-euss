@@ -11,7 +11,7 @@ def record_end_use_savings(building_temp, scout_col2resstock, agg_functions):
         if (building[f"{resstock_col_prefixes}__savings"] == 0).all(axis=0):
             building = building.drop([f"{resstock_col_prefixes}__baseline"], axis=1)
             building = building.drop([f"{resstock_col_prefixes}__savings"], axis=1)
-        elif (building[f"{resstock_col_prefixes}__savings"] <= 0).all(axis=0) and ((building[f"{resstock_col_prefixes}__savings"]/building[f"{resstock_col_prefixes}__baseline"]).fillna(0)>-0.01).all(axis=0):
+        elif (building[f"{resstock_col_prefixes}__savings"] <= 0).all(axis=0) and ((building[f"{resstock_col_prefixes}__savings"]/building[f"{resstock_col_prefixes}__baseline"]).fillna(0)>-0.001).all(axis=0):
             building = building.drop([f"{resstock_col_prefixes}__baseline"], axis=1)
             building = building.drop([f"{resstock_col_prefixes}__savings"], axis=1)
             
