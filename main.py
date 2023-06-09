@@ -33,4 +33,4 @@ scout_col2resstock = {
 }
 
 for upgrade_num in upgrade_nums:
-    SE.end_use_savings_emm(upgrade_num, emm_county, my_run, scout_col2resstock)
+    SE.save_enduse_savings(upgrade_num, emm_county, my_run, scout_col2resstock)

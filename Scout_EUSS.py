@@ -42,7 +42,7 @@ def clean_and_pivot_savings(savings_df, scout_col2resstock):
     return pd.concat(all_frames)
 
 
-def end_use_savings_emm(upgrade_num, emm_county, my_run: BuildStockQuery, scout_col2resstock):
+def save_enduse_savings(upgrade_num, emm_county, my_run: BuildStockQuery, scout_col2resstock):
     all_enduses = [enduse for enduse_list in scout_col2resstock.values()
                    for enduse in enduse_list]
     bldg_col = my_run.get_column('build_existing_model.geometry_building_type_recs', table_name=my_run.bs_table)
