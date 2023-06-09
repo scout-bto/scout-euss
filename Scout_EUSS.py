@@ -20,8 +20,10 @@ def clean_and_pivot_savings(savings_df, scout_col2resstock):
     # delete the end use columns that don't have changes (or less than 0.1% changes)
     available_enduses = []
     for resstock_col_prefixes in scout_col2resstock.keys():
+        savings_vals = savings_df[f"{resstock_col_prefixes}__savings"]
         pct_savings = savings_df[f"{resstock_col_prefixes}__savings"] / savings_df[f"{resstock_col_prefixes}__baseline"]
-        if ((pct_savings <= 0.001) & (pct_savings >= -0.001)).all(axis=0):
+        if (((savings_vals <= 0.1) & (savings_vals >= -0.1)).all(axis=0) or  # absolute savings less than 0.1
+           ((pct_savings <= 0.001) & (pct_savings >= -0.001)).all(axis=0)):  # percentage savings less then 0.1%
             savings_df = savings_df.drop(
                 [f"{resstock_col_prefixes}__baseline"], axis=1)
             savings_df = savings_df.drop(
@@ -46,22 +48,29 @@ def end_use_savings_emm(upgrade_num, emm_county, my_run: BuildStockQuery, scout_
     bldg_col = my_run.get_column('build_existing_model.geometry_building_type_recs', table_name=my_run.bs_table)
     new_bldg_type = MappedColumn(bsq=my_run, name="Building Type", mapping_dict=bldgmap, key=bldg_col)
 
+    batch_queries = []
+    emm_regions = list(emm_county.keys())
+    for count, key in enumerate(emm_regions, start=1):
+        print(f"Querying for EMM {key} for upgrade {upgrade_num}. {count}/{len(emm_county)} EMM region.")
+        res_savings_df_query = my_run.savings.savings_shape(upgrade_id=upgrade_num,
+                                                            applied_only=True,
+                                                            restrict=[('county', emm_county[key])],
+                                                            enduses=all_enduses,
+                                                            group_by=[new_bldg_type],
+                                                            annual_only=False,
+                                                            timestamp_grouping_func='hour',
+                                                            get_query_only=True)
+        batch_queries.append(res_savings_df_query)
+    batch_query_id = my_run.submit_batch_query(batch_queries)
+    my_run.wait_for_batch_query(batch_query_id)
+    batch_df = my_run.get_batch_query_result(batch_query_id, combine=False)
     result_dfs = []
-    for key in emm_county:
-        # get data in 15 min timestep
-        res_savings_df = my_run.savings.savings_shape(upgrade_id=upgrade_num,
-                                                      applied_only=True,
-                                                      restrict=[('county', emm_county[key])],
-                                                      enduses=all_enduses,
-                                                      group_by=[new_bldg_type],
-                                                      annual_only=False,
-                                                      timestamp_grouping_func='hour')
+    for key, res_savings_df in zip(emm_regions, batch_df):
         res_savings_df['EMM Region'] = key  # add emm region
-
         scout_savings_df = res_savings_df[['time', 'EMM Region', 'Building Type']].copy()
         for col_type in ['baseline', 'savings']:
             for resstock_col_prefixes in scout_col2resstock.keys():
-                resstock_cols = [f"{resstock_col_prefix}__{col_type}" 
+                resstock_cols = [f"{resstock_col_prefix}__{col_type}"
                                  for resstock_col_prefix in scout_col2resstock[resstock_col_prefixes]]
                 scout_savings_df[f"{resstock_col_prefixes}__{col_type}"] = res_savings_df[resstock_cols].sum(axis=1)
 
@@ -70,7 +79,6 @@ def end_use_savings_emm(upgrade_num, emm_county, my_run: BuildStockQuery, scout_
             bldg_type_savings_df = scout_savings_df.loc[res_savings_df['Building Type'] == bldg_type]
             clean_savings_df = clean_and_pivot_savings(bldg_type_savings_df, scout_col2resstock)
             dfs.append(clean_savings_df)
-
         all_savings_df = pd.concat(dfs)
         result_dfs.append(all_savings_df)
 
